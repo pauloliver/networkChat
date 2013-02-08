@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include "nheader.h"
 
 
@@ -13,14 +15,16 @@ typedef enum {
 }Command;
 
 
-void connectToHost(char *serverName, uint16_t portNum); 
+
+
+
+int connectToHost(char *serverName, uint16_t portNum); 
 void messageShell(); 
 Command validateInput(char *input);
 char *readLine();
 void outgoingMessage(char *data);
 void getClientList();
 void exitServer();
-
 
 
 int main(int argc, char *argv[]) {
@@ -30,9 +34,6 @@ int main(int argc, char *argv[]) {
     char *serverName;
     uint16_t portNum;
     int sock;
-    sockaddr_in remote;
-    hostent *hp;
-    int sockfd;
 
     
     if (argc != 5) {
@@ -56,21 +57,9 @@ int main(int argc, char *argv[]) {
     serverName = argv[3];
     portNum = atoi(argv[4]);
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sock = connectToHost(serverName, portNum); 
 
-    if (sock < 0) {
-        perror("socket call");
-        exit(EXIT_FAILURE);
-    }
-
-    remote.sin_family = AF_INET;
-    hp = gethostbyname(serverName);
-    memcpy(&remote.sin_addr, hp->h_addr, hp->h_length);
-    remote.sin_port = htons(portNum);
-
-    sockfd = connect(sock, &remote, hp->h_length); 
-
-    //connectToHost(serverName, portNum);
+    connectToHost(serverName, portNum);
 
     messageShell();
     
@@ -78,10 +67,41 @@ int main(int argc, char *argv[]) {
 }
 
 
-void connectToHost(char *serverName, uint16_t portNum) {
+/*
+ * Connects to host given a host name
+ * and a port number. Port number should
+ * be passed in machine order, the function
+ * will convert to network order
+ */
+int connectToHost(char *serverName, uint16_t portNum) {
+    int sock;
+    struct sockaddr_in remote;
+    struct hostent *hp;
 
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        exit(EXIT_FAILURE);
+    }
 
-   
+    remote.sin_family = AF_INET;
+
+    hp = gethostbyname(serverName);
+    if (hp == NULL) {
+        printf("Hostname error (%s)\n", serverName);
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy((char*)&remote.sin_addr, (char*)hp->h_addr, hp->h_length);
+
+    remote.sin_port = htons(portNum);
+
+    if (connect(sock, (struct sockaddr *)&remote, sizeof(struct sockaddr_in) < 0)) {
+        perror("connection error");
+        exit(EXIT_FAILURE);
+    }
+
+    return sock;
 }
 
 void messageShell() {
